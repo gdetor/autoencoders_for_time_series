@@ -1,8 +1,9 @@
 # Autoencoders for time series
 
-This repository provides a collection of autoencoders (AEs) and Variational AEs
-for time series data sets implemented in Pytorch.
-Autoencoders have several applications the time series field, such as
+This repository provides a collection of autoencoders (AEs) 
+and Variational AEs for time series data sets implemented in Pytorch.
+Autoencoders have several applications in the time series field, such
+as
   - classification [1]
   - anomaly detection [2],
   - and time series prediction [3].
@@ -10,14 +11,18 @@ Autoencoders have several applications the time series field, such as
 
 ### Available Autoencoders
 
-In this repository you will find the following models:
+In this repository, you will find the following models in the `models/`
+directory:
   - **Linear** AE with feed-forward encoder/decoder.
   - **CNN** AE with convolution neural network as encoder/decoder.
   - **Causal** AE with causal convolution encoder/decoder (dilated convolutions)
   - **LSTM** AE with LSTM encoder/decoder.
 
-For each case the variational AE [4] is also available in the directory `models/`.
-
+For each case above, a variational AE [4] is also available in the directory
+`models/`. In the directory `data_loader/`, you can find the  TimeseriesLoader
+class (see [here](https://github.com/gdetor/pytorch_timeseries_loader) for more details),
+and in the directory `data/`, you can find two data files (a sinusoidal
+signal and the female's births dataset).
 
 
 ### How to run
@@ -30,7 +35,7 @@ $ python3 train.py --epochs XX --batch-size XX --learning-rate X.XXXX --seq-len 
 ```
 
 It's up to you to define the number of epochs, batch size, learning rate, 
-the full path and file name of the data file as well as the full path and 
+the full path and file name of the data file, as well as the full path and 
 the chosen file name for the model (where to save the Pytorch model for later
 use). Furthermore, you can specify if the input time series is univariate 
 (number of features is 1) or multivariate (then the number of features is > 1).
@@ -39,22 +44,21 @@ you'd like to use in the forecasting--prediction (meaning how many data points
 the model will look into the past to predict one point in the future).
 
 Moreover, you can test any trained model by calling the script `test.py` and
-passing the corresponding to the model arguments.
+passing the corresponding model arguments.
 
 ```bash
 $ python3 test.py --batch-size 32 --seq-len 12 --num-features 1 --mlp-flag 0 --lstm-flag 1 --data-path ./data/sinusoidal.npy --model-path ./tune_dir/causal.pt
 
 ```
-The agruments that are similar with the training script have the exact same 
-meaning. However, you have to tell to the script if your testing model is an
-LSTM (set the flag --lstm-flag to 1) and if your model is an MLP (set the
-flag --mlp-flag to 1).
+The arguments similar to the training script have the same meaning. However,
+you have to tell the script if your testing model is an LSTM (set the flag
+--lstm-flag to 1) and if your model is an MLP (set the flag --mlp-flag to 1).
 
 
 
 ### How to tune the hyperparameters
 
-In this repository you will find a script named `tune_hyperparameters.py` that
+In this repository, you will find a script named `tune_hyperparameters.py` that
 provides all the necessary means to perform a search for your model's hyperparameters.
 The script is heavily based on the Python Ray Framework. 
 
