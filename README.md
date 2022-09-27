@@ -1,9 +1,11 @@
-# Autoencoder for time series
+# Autoencoders for time series
 
-This repository provides a collection of autoencoders (AEs) for time series 
-data sets. All the autoencoders here are implemented in Python and Pytorch. 
-It is known that AEs can be used in time series classification [1],
-anomaly detection [2], and time series prediction [3].
+This repository provides a collection of autoencoders (AEs) and Variational AEs
+for time series data sets implemented in Pytorch.
+Autoencoders have several applications the time series field, such as
+  - classification [1]
+  - anomaly detection [2],
+  - and time series prediction [3].
 
 
 ### Available Autoencoders
