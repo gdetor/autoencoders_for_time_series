@@ -42,11 +42,27 @@ def train(epochs,
           data_path='./data/sinusoidal.npy',
           model='cnn'):
     """
+        Trains one of the following autoencoders: Linear VAE, CNN AE, CNN VAE,
+        Causal CNN AE, Causal CNN VAE, LSTM AE, LSTM VAE.
+        The type of model can be one of the following: 'linear', 'cnn',
+        'cnn_vae', 'causal', 'causal_vae', 'lstm_ae', 'lstm_vae'.
 
+        Args:
+            epochs (int)        Number of training epochs
+            batch_size (int)    Batch size
+            lrate (float)       Learning rate
+            seq_len (int)       Sequence length for histortical (past) data
+            num_features (int)  Dimension of features (1 for univariate time
+            series)
+            model_path (str)    Where to store the model (.pt file)
+            data_path (str)     Where the training data are stored
+            model (str)         Model type (see above)
+
+        Returns: void
     """
     store = True
-    crit_flag = 0
-    net_flag = 0        # 0 CNN, 1 LSTM
+    crit_flag = 0         # 1: Causal VAE 2: MLP - Linear VAE
+    is_lstm_on = 0        # 0 CNN, 1 LSTM
 
     dev = device("cuda:0" if cuda.is_available() else "cpu")
     print("Running on", dev)
@@ -54,48 +70,50 @@ def train(epochs,
     if model == 'linear':
         print("Linear VAE")
         shape = (seq_len * num_features, 256)
+        # Define the nonlinear activation functions for the MLP
         funs_enc = (nn.ReLU(inplace=True),)
         funs_dec = (nn.ReLU(inplace=True), nn.Sigmoid())
+
         net = LVAE(shape=shape,
                    ldim=16,
                    device=dev,
                    funs_enc=funs_enc,
                    funs_dec=funs_dec).to(dev)
-        net_flag = 0
+        is_lstm_on = 0
         crit_flag = 2
     elif model == 'cnn':
         print("CNN AE")
         net = CNNAE(in_channels=num_features, sequence_length=seq_len).to(dev)
-        net_flag = 0
+        is_lstm_on = 0
         crit_flag = 0
     elif model == 'causal':
         print("CausalCNN AE")
         net = CausalCNNAE(in_channels=num_features,
                           sequence_length=seq_len).to(dev)
-        net_flag = 0
+        is_lstm_on = 0
         crit_flag = 0
     elif model == 'lstm_ae':
         print("LSTM AE")
         net = LSTMAE(1, 1, 128, 16, 2, seq_len=seq_len, enc_dropout=0.2,
                      dec_dropout=0.5, dev=dev).to(dev)
-        net_flag = 1
+        is_lstm_on = 1
         crit_flag = 0
     elif model == 'lstm_vae':
         print("LSTM VAE")
         net = LSTMVAE(1, 1, 256, 64, 2, seq_len=seq_len, enc_dropout=0.5,
                       dec_dropout=0.5, dev=dev).to(dev)
-        net_flag = 1
+        is_lstm_on = 1
         crit_flag = 0
     elif model == 'cnn_vae':
         print("CNN VAE")
         net = CNNVAE(in_channels=num_features, sequence_length=seq_len,
                      dev=dev).to(dev)
-        net_flag = 0
+        is_lstm_on = 0
     elif model == 'causal_vae':
         print('CausalCNN VAE')
         net = CausalCNNVAE(in_channels=num_features,
                            sequence_length=seq_len, dev=dev).to(dev)
-        net_flag = 0
+        is_lstm_on = 0
         crit_flag = 1
     else:
         print("No model specified!")
@@ -127,7 +145,7 @@ def train(epochs,
         for data in dataloader:
             x, _, _ = data
             x = x.to(dev)
-            if net_flag == 0:
+            if is_lstm_on == 0:
                 x = x.permute(0, 2, 1)
 
             if crit_flag == 2:

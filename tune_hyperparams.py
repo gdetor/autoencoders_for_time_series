@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import sys
+import argparse
 import numpy as np
 from torch import nn, cuda, device
 from torch import optim, save
@@ -28,7 +29,7 @@ from models.causalcnn_ae import CausalCNNAE
 from models.lstm_ae import LSTMAE
 from models.cnn_vae import CNNVAE
 from models.causalcnn_vae import CausalCNNVAE
-import matplotlib.pylab as plt
+# import matplotlib.pylab as plt
 
 from ray import tune
 
@@ -37,9 +38,7 @@ np.set_printoptions(threshold=np.inf)
 
 
 def train(config):
-    if len(sys.argv) != 3:
-        print("Please provide the type of model and the data path!")
-        exit(-1)
+    global model_type, data_path, store_data_path
 
     # Fixed parameters
     store = True
@@ -60,7 +59,7 @@ def train(config):
     print("Running on", dev)
 
     # Choose the model
-    if sys.argv[1] == 'linear':
+    if model_type == 'linear':
         print("Linear VAE")
         shape = (seq_len * num_features, 256)
         funs_enc = (nn.ReLU(inplace=True),)
@@ -72,26 +71,26 @@ def train(config):
                    funs_dec=funs_dec).to(dev)
         net_flag = 0
         crit_flag = 2
-    elif sys.argv[1] == 'cnn':
+    elif model_type == 'cnn':
         print("CNN AE")
         net = CNNAE(in_channels=num_features, sequence_length=seq_len).to(dev)
         net_flag = 0
         crit_flag = 0
-    elif sys.argv[1] == 'causal':
+    elif model_type == 'causal':
         print("CausalCNN AE")
         net = CausalCNNAE(in_channels=num_features,
                           sequence_length=seq_len).to(dev)
         net_flag = 0
         crit_flag = 0
-    elif sys.argv[1] == 'lstm':
+    elif model_type == 'lstm':
         net = LSTMAE(1, 1, 128, 16, 2, seq_len=seq_len, dev=dev).to(dev)
         net_flag = 1
         crit_flag = 0
-    elif sys.argv[1] == 'vaecnn':
+    elif model_type == 'vaecnn':
         net = CNNVAE(in_channels=num_features, sequence_length=seq_len,
                      dev=dev).to(dev)
         net_flag = 0
-    elif sys.argv[1] == 'vaecausal':
+    elif model_type == 'vaecausal':
         net = CausalCNNVAE(in_channels=num_features,
                            sequence_length=seq_len, dev=dev).to(dev)
         net_flag = 0
@@ -101,7 +100,7 @@ def train(config):
         sys.exit(-1)
 
     # Dataset and dataloader
-    ts = TimeseriesLoader(data_path=sys.argv[2],
+    ts = TimeseriesLoader(data_path=data_path,
                           sequence_len=seq_len,
                           scale=True,
                           standarize=False,
@@ -149,25 +148,50 @@ def train(config):
                                          lrate))
 
     if store is True:
-        base = "./results/"
-        save(net.state_dict(), base+"cnn_ae_st_indicators.pt")
-        save(net, base+"cnn_ae_model_indicators.pt")
+        base = store_data_path
+        save(net.state_dict(), base+model_type+"_state_indicators.pt")
+        save(net, base+model_type+"_indicators.pt")
     print("[%d] Loss: %f  %f" % (e, loss.item() / batch_size, lrate))
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.plot(np.array(loss_track, 'f'), 'k', alpha=0.6)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111)
+    # ax.plot(np.array(loss_track, 'f'), 'k', alpha=0.6)
     returned_loss = loss.item() / batch_size
 
     tune.report(mean_loss=returned_loss)
 
 
 if __name__ == '__main__':
+    global model_type, data_path, store_data_path
+    parser = argparse.ArgumentParser(description='Hyperparameters tuning')
+    parser.add_argument('--model-type',
+                        type=str,
+                        default='linear',
+                        metavar='N',
+                        help='Model type (default: linear)')
+    parser.add_argument('--data-path',
+                        type=str,
+                        default='./data/sinusoidal.npy',
+                        metavar='N',
+                        help='Full data path and data file name (default:\
+                        ./data/sinusoidal.npy)')
+    parser.add_argument('--store-data-path',
+                        type=str,
+                        default='./tmp/',
+                        metavar='N',
+                        help='Full data path and data file name')
+
+    args = parser.parse_args()
+    model_type = args.model_type
+    data_path = args.data_path
+    store_data_path = args.store_data_path
+
     search_space = {"epochs": tune.choice([50, 100, 150, 200]),
                     "lrate": tune.uniform(1e-6, 1e-3),
                     "sequence_len": tune.choice([4, 8, 12, 24]),
                     "batch_size": tune.choice([8, 16, 32, 64])}
 
-    optimization = tune.run(config=search_space,
+    optimization = tune.run(train,
+                            config=search_space,
                             num_samples=10,
                             metric="mean_loss",
                             mode="min",
