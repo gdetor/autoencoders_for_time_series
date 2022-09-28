@@ -47,7 +47,7 @@ def test(seq_len=20,
                                  0 for any other model
              is_lstm_on_on (int)    1 means the current model is an LSTM AE/VAE
                                  0 for any other model
-             model_path (str)    Where to store the model (.pt file)
+             model_path (str)    Where the trained model is stored (.pt file)
              data_path (str)     Where the training data are stored
 
          Returns: void
