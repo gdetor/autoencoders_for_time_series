@@ -28,7 +28,6 @@ from data_loader.timeseries_loader import TimeseriesLoader
 def test(seq_len=20,
          batch_size=1,
          num_features=1,
-         is_mlp_on=0,
          is_lstm_on=False,
          model_path='./results/cnn_vae_model.pt',
          data_path='./data/sinusoidal.npy'):
@@ -42,9 +41,6 @@ def test(seq_len=20,
              batch_size (int)    Batch size
              num_features (int)  Dimension of features (1 for univariate time
              series)
-             is_mlp_on (int)     1 means the current model is a Linear (MLP
-                                 AE/VAE)
-                                 0 for any other model
              is_lstm_on_on (int)    1 means the current model is an LSTM AE/VAE
                                  0 for any other model
              model_path (str)    Where the trained model is stored (.pt file)
@@ -79,17 +75,11 @@ def test(seq_len=20,
         for i, data in enumerate(dataloader):
             x, _, _ = data
             x = x.to(dev)
-            if is_mlp_on == 0 and is_lstm_on == 0:
-                x = x.permute(0, 2, 1)
-            if is_mlp_on == 1:
-                x = x.view(-1, seq_len * num_features)
-            res = net(x)
+            xhat = net(x)
             X.append(x.detach().cpu().numpy())
-            Y.append(res.detach().cpu().numpy())
+            Y.append(xhat.detach().cpu().numpy())
     X = np.array(X)
     Y = np.array(Y)
-    # np.save("./tune_dir/test_original", X)
-    # np.save("./tune_dir/test_reconstr", Y)
 
     X = np.squeeze(X)
     Y = np.squeeze(Y)
@@ -107,25 +97,22 @@ if __name__ == '__main__':
                         help='input sequence length (default: 20)')
     parser.add_argument('--num-features', type=int, default=1, metavar='N',
                         help='number of features (default: 1)')
-    parser.add_argument('--mlp-flag', type=int, default=0, metavar='N',
-                        help='MLP initialization flag (default: 0)')
-    parser.add_argument('--lstm-flag', type=int, default=0, metavar='N',
-                        help='LSTM initializaation flag (default: 0)')
     parser.add_argument('--data-path', type=str,
-                        default='/home/gdetor/ergasia/tests/wgan_ts/'
-                                + 'data/livelo.npy',
-                        metavar='N',
+                        default='./data/sinusoidal.npy',
                         help='Data set full path')
-    parser.add_argument('--model-path', type=str,
-                        default='./results/cnn_vae_model.pt',
-                        metavar='N',
-                        help='Trained model full path')
+    parser.add_argument('--model', type=str,
+                        default="cnn",
+                        help='model type (causal, lstm_ae, lstm_vae, cnn_vae, causal_vae)')
 
     args = parser.parse_args()
+
+    mlp_flag, lstm_flag = False, False
+    if "lstm" in args.model:
+        lstm_flag = True
+
     test(seq_len=args.seq_len,
          batch_size=args.batch_size,
          num_features=args.num_features,
-         is_mlp_on=args.dim_flag,
-         is_lstm_on=args.lstm_flag,
-         model_path=args.model_path,
+         is_lstm_on=lstm_flag,
+         model_path="./results/"+args.model,
          data_path=args.data_path)

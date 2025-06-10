@@ -26,14 +26,13 @@ class reparametrize(nn.Module):
     Reparametrization trick class. This class implements the reparametrization
     trick as in Kingma and Welling "Auto-Encoding Variational Bayes".
     """
-    def __init__(self, hidden_dim, latent_dim, dev="cpu"):
+    def __init__(self, hidden_dim, latent_dim):
         """
         Constructor of reparametrize class.
 
         Args:
             hidden_dim (int):   Number of units in the last hidden layer
             latent_dim (int):   The dimension of latent space
-            dev (torch device): Either CPU or GPU (the used device)
 
         Returns:
 
@@ -42,11 +41,11 @@ class reparametrize(nn.Module):
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
 
-        self.h2mean = nn.Linear(hidden_dim, latent_dim).to(dev)
-        self.h2var = nn.Linear(hidden_dim, latent_dim).to(dev)
+        self.h2mean = nn.Linear(hidden_dim, latent_dim)
+        self.h2var = nn.Linear(hidden_dim, latent_dim)
 
-        nn.init.xavier_uniform_(self.h2mean.weight)
-        nn.init.xavier_uniform_(self.h2var.weight)
+        nn.init.xavier_normal_(self.h2mean.weight)
+        nn.init.xavier_normal_(self.h2var.weight)
 
     def forward(self, x):
         """
@@ -63,7 +62,8 @@ class reparametrize(nn.Module):
             self.mu = self.h2mean(x)
             self.var = self.h2var(x)
             self.std = self.var.exp_()
-            eps = Variable(self.std.data.new(self.std.size()).normal_())
+            eps = Variable(self.std.data.new(
+                self.std.size()).normal_()).to(x.device)
             return eps.mul(self.std).add_(self.mu)
         else:
             self.mu = self.h2mean(x)
@@ -74,8 +74,15 @@ class LSTMVAE(nn.Module):
     """
         LSTM Variational Autoencoder Class
     """
-    def __init__(self, in_dim, out_dim, hidden_dim, latent_dim, n_layers,
-                 seq_len=1, enc_dropout=0.0, dec_dropout=0.0, dev="cpu"):
+    def __init__(self,
+                 in_dim=1,
+                 out_dim=1,
+                 hidden_dim=16,
+                 latent_dim=8,
+                 n_layers=1,
+                 seq_len=1,
+                 enc_dropout=0.0,
+                 dec_dropout=0.0):
         """
             Constructor of LSTM Encoder class.
 
@@ -87,26 +94,24 @@ class LSTMVAE(nn.Module):
                 seq_len (int):      Sequence length
                 enc_dropout (float):  Encoder dropout probability [0, 1]
                 enc_dropout (float):  Decoder dropout probability [0, 1]
-                dev (torch device): Device to upload the model
 
             Returns:
         """
         super(LSTMVAE, self).__init__()
-        self.dev = dev
         self.seq_len = seq_len
         self.ddim = out_dim
 
         # Encoder
         self.encoder = encoder(in_dim, out_dim, hidden_dim, n_layers,
-                               dropout=enc_dropout, dev=dev)
+                               dropout=enc_dropout)
 
         # Reparametrization
-        self.reparam = reparametrize(hidden_dim, latent_dim, dev=dev)
+        self.reparam = reparametrize(hidden_dim, latent_dim)
 
         # Decoder
         self.decoder = decoder(hidden_dim, hidden_dim, latent_dim, out_dim,
                                n_layers, seq_len, dropout=dec_dropout,
-                               is_vae=True, dev=dev)
+                               is_vae=True)
 
         # Annealing parameter (temperature)
         self.alpha = 0
@@ -146,7 +151,7 @@ class LSTMVAE(nn.Module):
         KLD = -0.5 * sum(1 + self.reparam.std - self.reparam.mu.pow(2) -
                          self.reparam.std.exp())
         KLD /= scale
-        return L + beta * KLD, L, KLD
+        return L + beta * KLD
 
     def var_loss_anneal(self, y_hat, y, loss_fn, epoch=0, beta=1):
         """

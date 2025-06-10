@@ -49,8 +49,7 @@ class encoder(nn.Module):
     """
         LSTM Encoder class
     """
-    def __init__(self, in_dim, out_dim, hidden_dim, n_layers, dropout=0,
-                 dev="cpu"):
+    def __init__(self, in_dim, out_dim, hidden_dim, n_layers, dropout=0):
         """
             Constructor of LSTM Encoder class.
 
@@ -60,19 +59,15 @@ class encoder(nn.Module):
                 hidden_dim (int):   Number of hidden units
                 n_layers (int):     Number of LSTM layers
                 dropout (float):    Dropout probability [0, 1]
-                dev (torch device): Device to upload the model
 
             Returns:
         """
         super(encoder, self).__init__()
-        self.dev = dev
         self.n_layers = n_layers
         self.hidden_dim = hidden_dim
 
         self.lstm = nn.LSTM(in_dim, hidden_dim, n_layers, batch_first=True,
-                            dropout=dropout).to(dev)
-
-        self.flag = 0       # Flag for initializing LSTM states (h0, c0)
+                            dropout=dropout)
 
         # Initialize weights and biases
         for layer in self.lstm._all_weights:
@@ -99,14 +94,14 @@ class encoder(nn.Module):
                 Output tensor (batch_size, sequence_length, num_features)
         """
         batch_size = x.shape[0]
-        if self.flag == 0:
-            self.h0 = nn.Parameter(randn(self.n_layers*1, batch_size,
-                                         self.hidden_dim),
-                                   requires_grad=True).to(self.dev)
-            self.c0 = nn.Parameter(randn(self.n_layers*1, batch_size,
-                                         self.hidden_dim),
-                                   requires_grad=True).to(self.dev)
-            self.flag = 1
+        self.h0 = zeros(self.n_layers*1,
+                        batch_size,
+                        self.hidden_dim,
+                        requires_grad=True).to(x.device)
+        self.c0 = zeros(self.n_layers*1,
+                        batch_size,
+                        self.hidden_dim,
+                        requires_grad=True).to(x.device)
         out, (h_end, c_end) = self.lstm(x, (self.h0, self.c0))
         return h_end[-1, :, :], self.c0
 
@@ -116,7 +111,7 @@ class decoder(nn.Module):
         LSTM Decoder class
     """
     def __init__(self, in_dim, hidden_dim, latent_dim, out_dim, n_layers,
-                 seq_len, dropout=0, is_vae=False, dev="cpu"):
+                 seq_len, dropout=0, is_vae=False):
         """
             Constructor of LSTM Encoder class.
 
@@ -136,18 +131,17 @@ class decoder(nn.Module):
         self.seq_len = seq_len
         self.hidden_dim = hidden_dim
         self.out_dim = out_dim
-        self.dev = dev
         self.is_vae = is_vae
 
         # LSTM model
         self.lstm = nn.LSTM(hidden_dim, hidden_dim, n_layers,
-                            batch_first=True, dropout=dropout).to(dev)
+                            batch_first=True, dropout=dropout)
         # Hidden to output linear layer
-        self.h2o = nn.Linear(hidden_dim, out_dim).to(dev)
+        self.h2o = nn.Linear(hidden_dim, out_dim)
 
         # Latent space to hidden
         if self.is_vae:
-            self.latent2h = nn.Linear(latent_dim, hidden_dim).to(dev)
+            self.latent2h = nn.Linear(latent_dim, hidden_dim)
         else:
             self.latent2h = Identity()
 
@@ -177,8 +171,8 @@ class decoder(nn.Module):
             Returns:
                 Output tensor (batch_size, sequence_length, num_features)
         """
-        self.decoder_inp = zeros(x.shape[0], self.seq_len, self.hidden_dim,
-                                 requires_grad=True).to(self.dev)
+        self.decoder_inp = randn(x.shape[0], self.seq_len, self.hidden_dim,
+                                 requires_grad=True).to(x.device)
 
         h = self.latent2h(x)
         h_0 = stack([h for _ in range(self.n_layers)])
@@ -191,8 +185,15 @@ class LSTMAE(nn.Module):
     """
         LSTM Autoencoder Class
     """
-    def __init__(self, in_dim, out_dim, hidden_dim, latent_dim, n_layers,
-                 seq_len=1, enc_dropout=0, dec_dropout=0, dev="cpu"):
+    def __init__(self,
+                 in_dim=1,
+                 out_dim=1,
+                 hidden_dim=1,
+                 latent_dim=1,
+                 n_layers=1,
+                 seq_len=1,
+                 enc_dropout=0,
+                 dec_dropout=0):
         """
             Constructor of LSTM Encoder class.
 
@@ -204,22 +205,27 @@ class LSTMAE(nn.Module):
                 seq_len (int):      Sequence length
                 enc_dropout (float):  Encoder dropout probability [0, 1]
                 enc_dropout (float):  Decoder dropout probability [0, 1]
-                dev (torch device): Device to upload the model
 
             Returns:
         """
         super(LSTMAE, self).__init__()
-        self.dev = dev
         self.seq_len = seq_len
         self.ddim = out_dim
-        self.flag = 0
 
         # Encoder
-        self.encoder = encoder(in_dim, out_dim, hidden_dim, n_layers,
-                               dropout=enc_dropout, dev=dev)
+        self.encoder = encoder(in_dim,
+                               out_dim,
+                               hidden_dim,
+                               n_layers,
+                               dropout=enc_dropout)
         # Decoder
-        self.decoder = decoder(hidden_dim, hidden_dim, latent_dim, out_dim,
-                               n_layers, seq_len, dropout=dec_dropout, dev=dev)
+        self.decoder = decoder(hidden_dim,
+                               hidden_dim,
+                               latent_dim,
+                               out_dim,
+                               n_layers,
+                               seq_len,
+                               dropout=dec_dropout)
 
         # Latent space
         self.h2l = nn.Linear(hidden_dim, latent_dim)
@@ -227,9 +233,6 @@ class LSTMAE(nn.Module):
 
         # Output nonlinearity
         self.relu = nn.ReLU()
-
-        self.encoder.flag = self.flag
-        self.decoder.flag = self.flag
 
     def forward(self, x):
         """

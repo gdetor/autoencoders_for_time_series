@@ -21,19 +21,12 @@ rng = np.random
 np.set_printoptions(threshold=np.inf)
 
 
-def init_weights(m):
-    """ Initialize weights m """
-    if type(m) == nn.Linear:
-        m.weight.data.uniform_(-0.08, 0.08)
-
-
 class CNNVAE(nn.Module):
     """
         Pytorch class implements a convolution autoencoder (CAE) used for
         timeseries analysis.
     """
-    def __init__(self, in_channels=1, sequence_length=1, latent_dim=16,
-                 dev='cpu'):
+    def __init__(self, in_channels=1, sequence_length=1, latent_dim=16):
         """
             Constructor of CNNAE class.
 
@@ -48,7 +41,6 @@ class CNNVAE(nn.Module):
         self.in_channels = in_channels
         self.seq_len = sequence_length
         self.latent_dim = latent_dim
-        self.dev = dev
 
         # Convolutions
         self.conv1 = nn.Conv1d(self.in_channels, 16, kernel_size=3,
@@ -73,8 +65,10 @@ class CNNVAE(nn.Module):
         self.pool = nn.MaxPool1d(kernel_size=2)
         self.dropout = nn.Dropout(0.2)
 
-        self.m.apply(init_weights)
-        self.s.apply(init_weights)
+        for name, p in self.named_parameters():
+            if "weight" in name:
+                print(name)
+                nn.init.xavier_normal_(p)
 
     def reparametrize(self, x):
         """
@@ -91,7 +85,7 @@ class CNNVAE(nn.Module):
             log_sigma = self.s(x)
             self.std = log_sigma.exp_()
             eps = Variable(self.std.data.new(self.std.size()).normal_()
-                           ).to(self.dev)
+                           ).to(x.device)
             return eps.mul(self.std).add_(self.mu)
         else:
             self.mu = self.m(x)
@@ -114,15 +108,21 @@ class CNNVAE(nn.Module):
             Returns:
                 output of size (BatchSize, InChannels, SeqLen)
         """
+        x = x.permute(0, 2, 1)
+
         out = self.relu(self.conv1(x))
         out = self.pool(out)
         out = self.relu(self.conv2(out))
         out = self.pool(out)
+
         m, n = out.shape[1], out.shape[2]
         out = out.view(-1, m * n)
         z = self.reparametrize(out)
+
         out = self.l2h(z)
         out = out.view(-1, m, n)
         out = self.relu(self.conv2_t(out))
         out = self.tanh(self.conv1_t(out))
+
+        out = out.permute(0, 2, 1)
         return out

@@ -17,8 +17,9 @@
 import argparse
 import sys
 import numpy as np
-from torch import nn, cuda, device
-from torch import optim, save
+
+import torch
+from torch import nn
 from torch.utils.data import DataLoader
 
 from data_loader.timeseries_loader import TimeseriesLoader
@@ -38,6 +39,7 @@ def train(epochs,
           lrate,
           seq_len,
           num_features,
+          is_vae_on=False,
           model_path='./results/lstm_forecast_model.pt',
           data_path='./data/sinusoidal.npy',
           model='cnn'):
@@ -54,6 +56,7 @@ def train(epochs,
             seq_len (int)       Sequence length for histortical (past) data
             num_features (int)  Dimension of features (1 for univariate time
             series)
+            is_vae_on (str)     Engages VAE's loss function
             model_path (str)    Where to store the model (.pt file)
             data_path (str)     Where the training data are stored
             model (str)         Model type (see above)
@@ -61,14 +64,12 @@ def train(epochs,
         Returns: void
     """
     store = True
-    crit_flag = 0         # 1: Causal VAE 2: MLP - Linear VAE
-    is_lstm_on = 0        # 0 CNN, 1 LSTM
 
-    dev = device("cuda:0" if cuda.is_available() else "cpu")
-    print("Running on", dev)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("Running on", device)
 
-    if model == 'linear':
-        print("Linear VAE")
+    if model == 'mlp_vae':
+        print("MLP VAE")
         shape = (seq_len * num_features, 256)
         # Define the nonlinear activation functions for the MLP
         funs_enc = (nn.ReLU(inplace=True),)
@@ -76,45 +77,44 @@ def train(epochs,
 
         net = LVAE(shape=shape,
                    ldim=16,
-                   device=dev,
                    funs_enc=funs_enc,
-                   funs_dec=funs_dec).to(dev)
-        is_lstm_on = 0
-        crit_flag = 2
+                   funs_dec=funs_dec).to(device)
     elif model == 'cnn':
         print("CNN AE")
-        net = CNNAE(in_channels=num_features, sequence_length=seq_len).to(dev)
-        is_lstm_on = 0
-        crit_flag = 0
+        net = CNNAE(in_channels=num_features,
+                    sequence_length=seq_len).to(device)
+    elif model == 'cnn_vae':
+        print("CNN VAE")
+        net = CNNVAE(in_channels=num_features,
+                     sequence_length=seq_len).to(device)
     elif model == 'causal':
         print("CausalCNN AE")
         net = CausalCNNAE(in_channels=num_features,
-                          sequence_length=seq_len).to(dev)
-        is_lstm_on = 0
-        crit_flag = 0
-    elif model == 'lstm_ae':
-        print("LSTM AE")
-        net = LSTMAE(1, 1, 128, 16, 2, seq_len=seq_len, enc_dropout=0.2,
-                     dec_dropout=0.5, dev=dev).to(dev)
-        is_lstm_on = 1
-        crit_flag = 0
-    elif model == 'lstm_vae':
-        print("LSTM VAE")
-        net = LSTMVAE(1, 1, 256, 64, 2, seq_len=seq_len, enc_dropout=0.5,
-                      dec_dropout=0.5, dev=dev).to(dev)
-        is_lstm_on = 1
-        crit_flag = 0
-    elif model == 'cnn_vae':
-        print("CNN VAE")
-        net = CNNVAE(in_channels=num_features, sequence_length=seq_len,
-                     dev=dev).to(dev)
-        is_lstm_on = 0
+                          sequence_length=seq_len).to(device)
     elif model == 'causal_vae':
         print('CausalCNN VAE')
         net = CausalCNNVAE(in_channels=num_features,
-                           sequence_length=seq_len, dev=dev).to(dev)
-        is_lstm_on = 0
-        crit_flag = 1
+                           sequence_length=seq_len).to(device)
+    elif model == 'lstm_ae':
+        print("LSTM AE")
+        net = LSTMAE(in_dim=1,
+                     out_dim=1,
+                     hidden_dim=128,
+                     latent_dim=16,
+                     n_layers=2,
+                     seq_len=seq_len,
+                     enc_dropout=0.1,
+                     dec_dropout=0.1).to(device)
+    elif model == 'lstm_vae':
+        print("LSTM VAE")
+        net = LSTMVAE(in_dim=1,
+                      out_dim=1,
+                      hidden_dim=256,
+                      latent_dim=64,
+                      n_layers=2,
+                      seq_len=seq_len,
+                      enc_dropout=0.1,
+                      dec_dropout=0.1).to(device)
     else:
         print("No model specified!")
         sys.exit(-1)
@@ -129,37 +129,39 @@ def train(epochs,
                           data_split_perc=0.7)
     dataloader = DataLoader(ts,
                             batch_size=batch_size,
-                            shuffle=False,
+                            shuffle=True,
                             drop_last=True)
 
     # Optimizer
-    optimizer = optim.Adam(net.parameters(), lr=lrate, weight_decay=1e-5)
+    optimizer = torch.optim.AdamW(net.parameters(),
+                                  lr=lrate,
+                                  weight_decay=1e-5)
 
     # Scheduler
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, 300, gamma=0.1,
-    #                                       last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                300,
+                                                gamma=0.1,
+                                                last_epoch=-1)
     criterion = nn.MSELoss()
 
     loss_track = []
     for e in range(epochs):
         for data in dataloader:
             x, _, _ = data
-            x = x.to(dev)
-            if is_lstm_on == 0:
-                x = x.permute(0, 2, 1)
+            x = x.to(device)
 
-            if crit_flag == 2:
-                x = x.view(-1, seq_len * num_features)
             optimizer.zero_grad()
-            y_hat = net(x)
 
-            if crit_flag == 0:
-                loss = criterion(y_hat, x)
+            x_hat = net(x)
+
+            if is_vae_on is False:
+                loss = criterion(x_hat, x)
             else:
-                loss = net.var_loss(y_hat, x, criterion)
+                loss = net.var_loss(x_hat, x, criterion)
+
             loss.backward()
             optimizer.step()
-        # scheduler.step()
+        scheduler.step()
 
         if e % 20 == 0:
             loss_track.append(loss.item() / batch_size)
@@ -168,7 +170,7 @@ def train(epochs,
                                          lrate))
     print("[%d] Loss: %f  %f" % (e, loss.item() / batch_size, lrate))
     if store is True:
-        save(net, model_path)
+        torch.save(net, model_path)
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(np.array(loss_track, 'f'), 'k', alpha=0.6)
@@ -187,31 +189,34 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 128)')
     parser.add_argument('--learning-rate', type=float, default=2e-3,
-                        metavar='N',
                         help='learning rate for training (default: 2e-3)')
     parser.add_argument('--seq-len', type=int, default=20, metavar='N',
                         help='input sequence length (default: 20)')
     parser.add_argument('--num-features', type=int, default=1, metavar='N',
                         help='input dimension (default: 1)')
     parser.add_argument('--data-path', type=str,
-                        default='./data/sinusoidal.npy'
-                                + 'data/livelo.npy',
-                        metavar='N',
+                        default='./data/sinusoidal.npy',
                         help='Data set full path')
     parser.add_argument('--model-path', type=str,
                         default='./results/cnn_vae_model.pt',
-                        metavar='N',
                         help='Trained model full path')
     parser.add_argument('--model', type=str,
                         default='cnn',
-                        metavar='N',
-                        help='model type')
+                        help='model type (mlp_vae, causal, causal_vae,\
+                                lstm_ae, lstm_vae, cnn_vae, causal_vae)')
+
     args = parser.parse_args()
+
+    is_vae_on = False
+    if "vae" in args.model:
+        is_vae_on = True
+
     train(args.epochs,
           args.batch_size,
           args.learning_rate,
           args.seq_len,
           args.num_features,
-          args.model_path,
-          args.data_path,
-          args.model)
+          is_vae_on=is_vae_on,
+          model_path="./results/"+args.model,
+          data_path=args.data_path,
+          model=args.model)

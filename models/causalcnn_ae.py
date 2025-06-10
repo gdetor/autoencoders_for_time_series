@@ -95,12 +95,15 @@ class CausalCNNAE(nn.Module):
             Returns:
                 output of size (BatchSize, InChannels, SeqLen)
         """
+        x = x.permute(0, 2, 1)
+
         out = self.relu(self.conv1(x))
         out = out[:, :, :-self.conv1.padding[0]]
         out = self.pool(out)
         out = self.relu(self.conv2(out))
         out = out[:, :, :-self.conv2.padding[0]]
         out = self.pool(out)
+
         m, n = out.shape[1], out.shape[2]
         out = out.view(-1, m * n)
         out = self.h2l(out)
@@ -108,4 +111,6 @@ class CausalCNNAE(nn.Module):
         out = out.view(-1, m, n)
         out = self.relu(self.conv2_t(out))
         out = self.tanh(self.conv1_t(out))
+
+        out = out.permute(0, 2, 1)
         return out

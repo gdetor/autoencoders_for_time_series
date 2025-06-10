@@ -149,14 +149,11 @@ class LVAE(nn.Module):
                 vae (bool):             Determines if the variational AE is
                                         enabled
                 ldim (int):             Latent dimension
-                devive (torch dev):     Determines the device on which the
-                                        model will be running
 
             Returns:
         """
         super(LVAE, self).__init__()
         self.shape_dec = shape[::-1]
-        self.dev = device
 
         self.encoder = LENC(shape=shape, funs=funs_enc)
         self.decoder = LDEC(shape=shape[::-1], funs=funs_dec, vae=vae,
@@ -184,7 +181,7 @@ class LVAE(nn.Module):
             self.log_sigma = self.s(x)
             self.std = self.log_sigma.exp_()
             eps = Variable(self.std.data.new(self.std.size()).normal_()
-                           ).to(self.dev)
+                           ).to(x.device)
             return eps.mul(self.std).add_(self.mu)
         else:
             self.mu = self.m(x)
@@ -222,7 +219,13 @@ class LVAE(nn.Module):
             Returns:
                 output of size (BatchSize, SeqLen, #features)
         """
-        res = self.encoder(x)
-        res = self.reparametrize(res)
-        res = self.decoder(res)
-        return res
+        bsz, sql, fts = x.shape
+
+        x = x.reshape(bsz, sql * fts)
+
+        out = self.encoder(x)
+        out = self.reparametrize(out)
+        out = self.decoder(out)
+
+        out = out.reshape(bsz, sql, fts)
+        return out
