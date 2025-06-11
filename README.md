@@ -31,7 +31,7 @@ You can run any of the seven different models by just passing the necessary
 arguments to the python script `train.py`.
 
 ```bash
-$ python3 train.py --epochs XX --batch-size XX --learning-rate X.XXXX --seq-len X --num-features X --data-path PATH_TO_DATAFILE --model-path PATH_TO_MODEL.pt --model MODEL_TYPE
+$ python3 train.py --epochs XX --batch-size XX --learning-rate X.XXXX --seq-len X --num-features X --data-path PATH_TO_DATAFILE --model MODEL_TYPE
 ```
 
 It's up to you to define the number of epochs, batch size, learning rate, 
@@ -43,31 +43,23 @@ You are also responsible for setting the number of past (historical) points
 you'd like to use in the forecasting--prediction (meaning how many data points
 the model will look into the past to predict one point in the future).
 
+The `MODEL_TYPE` should be one of the following options:
+  - "cnn"
+  - "cnn_vae"
+  - "mlp_vae" (linear)
+  - "lstm_ae"
+  - "lstm_vae"
+  - "causal_ae"
+  - "causal_vae"
+
 Moreover, you can test any trained model by calling the script `test.py` and
 passing the corresponding model arguments.
 
 ```bash
-$ python3 test.py --batch-size 32 --seq-len 12 --num-features 1 --mlp-flag 0 --lstm-flag 1 --data-path ./data/sinusoidal.npy --model-path ./tune_dir/causal.pt
+$ python3 test.py --batch-size 32 --seq-len 12 --num-features 1 --data-path ./data/sinusoidal.npy --model MODEL_TYPE
 
 ```
-The arguments similar to the training script have the same meaning. However,
-you have to tell the script if your testing model is an LSTM (set the flag
---lstm-flag to 1) and if your model is an MLP (set the flag --mlp-flag to 1).
-
-
-
-### How to tune the hyperparameters
-
-In this repository, you will find a script named `tune_hyperparameters.py` that
-provides all the necessary means to perform a search for your model's hyperparameters.
-The script is heavily based on the Python Ray Framework. 
-
-```bash
-$ python3 tune_hyperparams.py --model-type MODEL_TYPE --data-path FULL_PATH_TO_DATA_FILE --store-data-path FULL_PATH_TO_WHERE_THE_RESULTS_WILL_BE_STORED
-
-```
-You will have to provide the model type, the path to the input data file and
-the full path to the directory where results will be stored.
+The arguments similar to the training script have the same meaning.
 
 
 ### Dependencies

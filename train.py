@@ -79,7 +79,7 @@ def train(epochs,
                    ldim=16,
                    funs_enc=funs_enc,
                    funs_dec=funs_dec).to(device)
-    elif model == 'cnn':
+    elif model == 'cnn_ae':
         print("CNN AE")
         net = CNNAE(in_channels=num_features,
                     sequence_length=seq_len).to(device)
@@ -87,7 +87,7 @@ def train(epochs,
         print("CNN VAE")
         net = CNNVAE(in_channels=num_features,
                      sequence_length=seq_len).to(device)
-    elif model == 'causal':
+    elif model == 'causal_ae':
         print("CausalCNN AE")
         net = CausalCNNAE(in_channels=num_features,
                           sequence_length=seq_len).to(device)
@@ -202,8 +202,9 @@ if __name__ == '__main__':
                         help='Trained model full path')
     parser.add_argument('--model', type=str,
                         default='cnn',
-                        help='model type (mlp_vae, causal, causal_vae,\
-                                lstm_ae, lstm_vae, cnn_vae, causal_vae)')
+                        help='model type (mlp_vae, causal_ae, causal_vae,\
+                                lstm_ae, lstm_vae, cnn_ae, cnn_vae,\
+                                causal_vae)')
 
     args = parser.parse_args()
 
