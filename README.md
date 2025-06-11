@@ -28,9 +28,11 @@ signal and the female's births dataset).
 ### How to run
 
 You can run any of the seven different models by just passing the necessary 
-arguments to the python script `train.py`.
+arguments to the python script `train.py`. Before you run the scripts, though, you should
+create a `./results/` directory.
 
 ```bash
+$ mkdir results
 $ python3 train.py --epochs XX --batch-size XX --learning-rate X.XXXX --seq-len X --num-features X --data-path PATH_TO_DATAFILE --model MODEL_TYPE
 ```
 
